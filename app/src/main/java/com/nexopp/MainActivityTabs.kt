@@ -179,7 +179,7 @@ internal fun MainActivity.restoreTabs(p: EditorPane, then: () -> Unit = {}) {
 
 internal fun MainActivity.persistTabs() {
     mirrors.flush()
-    pane.persist()
+    panes.forEach { it.persist() }
     prunePdfCache()
 }
 

@@ -31,6 +31,23 @@ internal object ElementEdits {
         return doc.copy(pages = pages)
     }
 
+    /** Append multiple [elements] to page [pageIndex]'s active layer, or null. */
+    fun addElements(
+        doc: Document,
+        pageIndex: Int,
+        elements: List<Element>,
+        activeLayerOf: (Page) -> Int,
+    ): Document? {
+        if (elements.isEmpty()) return doc
+        val pages = doc.pages.toMutableList()
+        val page = pages.getOrNull(pageIndex) ?: return null
+        val layers = page.layers.ifEmpty { listOf(Layer(emptyList())) }.toMutableList()
+        val target = activeLayerOf(page).coerceIn(0, layers.lastIndex)
+        layers[target] = Layer(layers[target].elements + elements, layers[target].name)
+        pages[pageIndex] = page.copy(layers = layers)
+        return doc.copy(pages = pages)
+    }
+
     /**
      * Replace [old] (matched by identity, so two equal text boxes never swap) with [new], or remove
      * it when [new] is null. Null when [old] isn't in the document.
@@ -48,6 +65,29 @@ internal object ElementEdits {
             })
         }
         return if (changed) doc.copy(pages = pages) else null
+    }
+
+    /**
+     * Update an existing [TextElement] strictly preserving all attributes not explicitly modified
+     * (including color, size, font, audio extraAttrs, etc.).
+     */
+    fun updateText(
+        doc: Document,
+        old: TextElement,
+        newContent: String? = null,
+        newFont: String? = null,
+        newSize: Double? = null,
+        newColor: Int? = null,
+        extraModifier: ((Map<String, String>) -> Map<String, String>)? = null,
+    ): Document? {
+        val updated = old.copy(
+            content = newContent ?: old.content,
+            font = newFont ?: old.font,
+            size = newSize ?: old.size,
+            color = newColor ?: old.color,
+            extraAttrs = extraModifier?.invoke(old.extraAttrs) ?: old.extraAttrs
+        )
+        return replaceElement(doc, old, updated)
     }
 
     /** The top-most text box on [pageIndex] whose (approximate) bounds contain the point, or null. */

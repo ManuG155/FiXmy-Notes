@@ -143,16 +143,18 @@ fun TextBoxDialog(
     initialFamily: String,
     initialBold: Boolean,
     initialItalic: Boolean,
+    initialUnderline: Boolean = false,
     initialSize: Double,
     initialColor: Int,
     palette: ColorPaletteState,
-    onConfirm: (content: String, family: String, bold: Boolean, italic: Boolean, sizePt: Double, colorArgb: Int) -> Unit,
+    onConfirm: (content: String, family: String, bold: Boolean, italic: Boolean, underline: Boolean, sizePt: Double, colorArgb: Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var content by remember { mutableStateOf(initialContent) }
     var family by remember { mutableStateOf(initialFamily) }
     var bold by remember { mutableStateOf(initialBold) }
     var italic by remember { mutableStateOf(initialItalic) }
+    var underline by remember { mutableStateOf(initialUnderline) }
     var size by remember { mutableStateOf(initialSize.toFloat().coerceIn(TEXT_SIZE_MIN, TEXT_SIZE_MAX)) }
     var colorArgb by remember { mutableStateOf(initialColor) }
     var editingColor by remember { mutableStateOf(false) }
@@ -198,6 +200,7 @@ fun TextBoxDialog(
                     FontFamilyPicker(family = family, onFamily = { family = it })
                     FilterChip(selected = bold, onClick = { bold = !bold }, label = { Text("Negrita") })
                     FilterChip(selected = italic, onClick = { italic = !italic }, label = { Text("Cursiva") })
+                    FilterChip(selected = underline, onClick = { underline = !underline }, label = { Text("Subrayado") })
                 }
                 Text("Tamaño: ${size.roundToInt()} pt", style = MaterialTheme.typography.labelMedium)
                 Slider(
@@ -214,7 +217,7 @@ fun TextBoxDialog(
             }
         },
         confirmButton = {
-            androidx.compose.material3.Button(onClick = { onConfirm(content, family, bold, italic, size.toDouble(), colorArgb) }) {
+            androidx.compose.material3.Button(onClick = { onConfirm(content, family, bold, italic, underline, size.toDouble(), colorArgb) }) {
                 Text("Insertar Texto")
             }
         },

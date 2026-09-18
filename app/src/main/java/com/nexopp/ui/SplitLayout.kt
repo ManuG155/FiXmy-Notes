@@ -10,7 +10,13 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,7 +27,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 private const val MIN_FRACTION = 0.15f
-private val HANDLE_WIDTH = 24.dp
+private val HANDLE_WIDTH = 28.dp
 private val HANDLE_LINE = 2.dp
 
 @Composable
@@ -29,6 +35,7 @@ fun SplitLayout(
     fraction: Float,
     onFraction: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    onClose: (() -> Unit)? = null,
     first: @Composable (Modifier) -> Unit,
     second: @Composable (Modifier) -> Unit,
 ) {
@@ -54,8 +61,24 @@ fun SplitLayout(
                     modifier = Modifier
                         .fillMaxHeight()
                         .width(HANDLE_LINE)
-                        .background(MaterialTheme.colorScheme.outline),
+                        .background(MaterialTheme.colorScheme.outlineVariant),
                 )
+                if (onClose != null) {
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
+                            .semantics { contentDescription = "Cerrar vista dividida" }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cerrar división",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
             }
             second(Modifier.fillMaxHeight().weight((1f - fraction).coerceIn(MIN_FRACTION, 1f - MIN_FRACTION)))
         }

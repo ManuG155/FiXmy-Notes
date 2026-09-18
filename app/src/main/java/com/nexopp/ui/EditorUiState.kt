@@ -18,6 +18,7 @@ class TextDefaults {
     var family by mutableStateOf(FontDescription.DEFAULT_FAMILY)
     var bold by mutableStateOf(false)
     var italic by mutableStateOf(false)
+    var underline by mutableStateOf(false)
     var size by mutableStateOf(TEXT_SIZE_PT)
     var color by mutableStateOf(PEN_COLORS.first())
 }
@@ -120,6 +121,8 @@ class EditorUiState(
     var showPeriodicTableDialog by mutableStateOf(false)
     var showTableEditDialog by mutableStateOf(false)
     var showFunctionPlotterDialog by mutableStateOf(false)
+    var showBrowserDialog by mutableStateOf(false)
+    var showSpeechToText by mutableStateOf(false)
 
     val textDefaults = TextDefaults()
 

@@ -37,12 +37,15 @@ import com.nexopp.render.deleteSelection
 import com.nexopp.render.duplicateSelection
 import com.nexopp.render.finishSpline
 import com.nexopp.render.getSelectedStrokes
+import com.nexopp.render.insertMultipleImages
 import com.nexopp.render.insertTextAdjacentToSelection
+import com.nexopp.render.insertTextElement
 import com.nexopp.render.pasteClipboard
 import com.nexopp.render.recognizeSelectedStrokes
 import com.nexopp.render.replaceSelectionWithText
 import com.nexopp.render.restyleSelection
 import com.nexopp.render.undoLastSplineNode
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun BoxScope.EditorOverlays(
@@ -69,15 +72,23 @@ fun BoxScope.EditorOverlays(
             initialFamily = existing?.let { com.nexopp.format.FontDescription.parse(it.font) }?.family ?: defaults.family,
             initialBold = existing?.let { com.nexopp.format.FontDescription.parse(it.font) }?.bold ?: defaults.bold,
             initialItalic = existing?.let { com.nexopp.format.FontDescription.parse(it.font) }?.italic ?: defaults.italic,
+            initialUnderline = existing?.let { it.extraAttrs["underline"] == "true" } ?: defaults.underline,
             initialSize = existing?.size ?: defaults.size,
             initialColor = existing?.color ?: ui.color,
             palette = palette,
-            onConfirm = { content, family, bold, italic, sizePt, colorArgb ->
+            onConfirm = { content, family, bold, italic, underline, sizePt, colorArgb ->
+                val extras = if (underline) mapOf("underline" to "true") else emptyMap()
                 surface?.insertText(
-                    placement, content, com.nexopp.format.FontDescription(family, bold, italic).compose(), sizePt, colorArgb
+                    placement,
+                    content,
+                    com.nexopp.format.FontDescription(family, bold, italic).compose(),
+                    sizePt,
+                    colorArgb,
+                    extras,
                 )
                 if (existing == null) {
                     defaults.family = family; defaults.bold = bold; defaults.italic = italic
+                    defaults.underline = underline
                     defaults.size = sizePt; defaults.color = colorArgb
                 }
                 ui.textPlacement = null
@@ -153,6 +164,50 @@ fun BoxScope.EditorOverlays(
             initialFormat = currentSaveFormat(),
             onConfirm = { filename, format -> ui.showSaveAs = false; onSaveAs(filename, format) },
             onDismiss = { ui.showSaveAs = false },
+        )
+    }
+
+    if (ui.showBrowserDialog) {
+        IntegratedBrowserDialog(
+            onInsertText = { text ->
+                val pIdx = surface?.visiblePageIndex() ?: 0
+                val extras = if (ui.textDefaults.underline) mapOf("underline" to "true") else emptyMap()
+                surface?.insertTextElement(
+                    text = text,
+                    sizePt = ui.textDefaults.size.toDouble(),
+                    color = ui.color,
+                    font = com.nexopp.format.FontDescription(ui.textDefaults.family, ui.textDefaults.bold, ui.textDefaults.italic).compose(),
+                    extraAttrs = extras,
+                    pageIndex = pIdx
+                )
+            },
+            onInsertImage = { bytes ->
+                val pIdx = surface?.visiblePageIndex() ?: 0
+                surface?.insertMultipleImages(listOf(bytes), pIdx)
+            },
+            onDismiss = { ui.showBrowserDialog = false }
+        )
+    }
+
+    if (ui.showSpeechToText) {
+        val context = LocalContext.current
+        val speechManager = remember(context) {
+            com.nexopp.audio.SpeechToTextManager(context) { dictatedText ->
+                val pIdx = surface?.visiblePageIndex() ?: 0
+                val extras = if (ui.textDefaults.underline) mapOf("underline" to "true") else emptyMap()
+                surface?.insertTextElement(
+                    text = dictatedText,
+                    sizePt = ui.textDefaults.size.toDouble(),
+                    color = ui.color,
+                    font = com.nexopp.format.FontDescription(ui.textDefaults.family, ui.textDefaults.bold, ui.textDefaults.italic).compose(),
+                    extraAttrs = extras,
+                    pageIndex = pIdx
+                )
+            }
+        }
+        SpeechTranscriptionDialog(
+            speechManager = speechManager,
+            onDismiss = { ui.showSpeechToText = false }
         )
     }
 }

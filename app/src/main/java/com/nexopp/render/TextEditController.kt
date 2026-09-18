@@ -45,17 +45,25 @@ internal class TextEditController(
      * @param sizePt Font size in points.
      * @param colorArgb ARGB color.
      */
-    fun insertText(p: Placement, content: String, font: String, sizePt: Double, colorArgb: Int) {
+    fun insertText(
+        p: Placement,
+        content: String,
+        font: String,
+        sizePt: Double,
+        colorArgb: Int,
+        extraAttrs: Map<String, String> = emptyMap(),
+    ) {
         val target = editingTarget
         editingTarget = null
         if (content.isBlank()) {
             if (target != null) replace(target, null)
             return
         }
+        val mergedExtras = (target?.extraAttrs ?: emptyMap()) + extraAttrs
         val text = if (target != null) {
-            TextElement(font, sizePt, target.x, target.y, colorArgb, content)
+            TextElement(font, sizePt, target.x, target.y, colorArgb, content, mergedExtras)
         } else {
-            TextElement(font, sizePt, p.xPt, p.yPt, colorArgb, content)
+            TextElement(font, sizePt, p.xPt, p.yPt, colorArgb, content, mergedExtras)
         }
         if (target != null) replace(target, text) else add(p.pageIndex, text)
     }

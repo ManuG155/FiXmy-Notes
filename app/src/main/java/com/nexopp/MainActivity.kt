@@ -176,8 +176,10 @@ class MainActivity : ComponentActivity() {
     internal var busy = mutableStateOf<String?>(null)
 
     private val pickImageLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            uri?.let { insertPickedImage(it) }
+        registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            if (!uris.isNullOrEmpty()) {
+                insertPickedImages(uris)
+            }
         }
 
     internal val takePhotoLauncher =

@@ -135,6 +135,50 @@ object SelectionOps {
     }
 
     /**
+     * Return [pages] with [TextElement]s at [refs] on page [pageIndex] restyled: toggling bold/italic/underline,
+     * setting font size, or setting font family, while strictly preserving all other existing attributes.
+     */
+    fun restyleText(
+        pages: List<Page>,
+        pageIndex: Int,
+        refs: Set<ElementRef>,
+        toggleBold: Boolean = false,
+        toggleItalic: Boolean = false,
+        toggleUnderline: Boolean = false,
+        fontSizePt: Double? = null,
+        fontFamily: String? = null,
+    ): List<Page> {
+        if (refs.isEmpty()) return pages
+        return mapPage(pages, pageIndex) { li, ei, el ->
+            if (ElementRef(li, ei) !in refs || el !is TextElement) el
+            else {
+                var currentFd = com.nexopp.format.FontDescription.parse(el.font)
+                if (fontFamily != null) currentFd = currentFd.copy(family = fontFamily)
+                if (toggleBold) currentFd = currentFd.copy(bold = !currentFd.bold)
+                if (toggleItalic) currentFd = currentFd.copy(italic = !currentFd.italic)
+                val newFont = currentFd.compose()
+
+                val newSize = fontSizePt ?: el.size
+
+                val newExtras = el.extraAttrs.toMutableMap()
+                if (toggleUnderline) {
+                    val isCurrentlyUnderlined = el.extraAttrs["underline"] == "true"
+                    if (isCurrentlyUnderlined) {
+                        newExtras.remove("underline")
+                    } else {
+                        newExtras["underline"] = "true"
+                    }
+                }
+                el.copy(
+                    font = newFont,
+                    size = newSize,
+                    extraAttrs = newExtras
+                )
+            }
+        }
+    }
+
+    /**
      * The elements named by [refs] on [page], in a stable layer-then-index order (for copy/cut).
      */
     fun elementsAt(page: Page, refs: Set<ElementRef>): List<Element> =

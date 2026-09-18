@@ -19,6 +19,9 @@ data class FontDescription(val family: String, val bold: Boolean, val italic: Bo
         if (italic) append(" Italic")
     }
 
+    fun toggleBold(): FontDescription = copy(bold = !bold)
+    fun toggleItalic(): FontDescription = copy(italic = !italic)
+
     companion object {
         const val DEFAULT_FAMILY = "Sans"
 

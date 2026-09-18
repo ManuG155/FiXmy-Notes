@@ -43,4 +43,19 @@ class FontDescriptionTest {
             assertEquals(s, FontDescription.parse(s).compose())
         }
     }
+
+    @Test fun toggleBoldAndItalic() {
+        val initial = FontDescription("Sans", bold = false, italic = false)
+        val bold = initial.toggleBold()
+        assertEquals(true, bold.bold)
+        assertEquals(false, bold.italic)
+        val both = bold.toggleItalic()
+        assertEquals(true, both.bold)
+        assertEquals(true, both.italic)
+        assertEquals("Sans Bold Italic", both.compose())
+        val unbold = both.toggleBold()
+        assertEquals(false, unbold.bold)
+        assertEquals(true, unbold.italic)
+        assertEquals("Sans Italic", unbold.compose())
+    }
 }

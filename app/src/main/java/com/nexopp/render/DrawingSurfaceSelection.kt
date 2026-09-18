@@ -10,8 +10,13 @@ package com.nexopp.render
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.view.MotionEvent
+import androidx.core.content.FileProvider
 import com.nexopp.format.model.Element
+import com.nexopp.format.model.ImageElement
+import com.nexopp.format.model.TextElement
+import java.io.File
 
 // --- selection: rubber-band / tap to select, drag to move, delete ------------------------------
 
@@ -97,14 +102,108 @@ fun DrawingSurfaceView.restyleSelection(color: Int?, widthPt: Double?) {
     render()
 }
 
+/** Returns the currently selected TextElement if a single text element is selected, null otherwise. */
+fun DrawingSurfaceView.selectedTextElement(): TextElement? {
+    val sel = selection ?: return null
+    val page = doc.pages.getOrNull(sel.pageIndex) ?: return null
+    val elements = SelectionOps.elementsAt(page, sel.refs)
+    return elements.filterIsInstance<TextElement>().singleOrNull()
+}
+
+/** Toggles underline on selected TextElement(s) in an undoable edit. */
+fun DrawingSurfaceView.toggleTextUnderline() {
+    val sel = selection ?: return
+    val before = doc
+    val pages = SelectionOps.restyleText(doc.pages, sel.pageIndex, sel.refs, toggleUnderline = true)
+    if (pages === doc.pages) return
+    doc = doc.copy(pages = pages)
+    history.record(before)
+    notifyHistory()
+    relayout()
+    render()
+}
+
+/** Toggles bold on selected TextElement(s) in an undoable edit. */
+fun DrawingSurfaceView.toggleTextBold() {
+    val sel = selection ?: return
+    val before = doc
+    val pages = SelectionOps.restyleText(doc.pages, sel.pageIndex, sel.refs, toggleBold = true)
+    if (pages === doc.pages) return
+    doc = doc.copy(pages = pages)
+    history.record(before)
+    notifyHistory()
+    relayout()
+    render()
+}
+
+/** Toggles italic on selected TextElement(s) in an undoable edit. */
+fun DrawingSurfaceView.toggleTextItalic() {
+    val sel = selection ?: return
+    val before = doc
+    val pages = SelectionOps.restyleText(doc.pages, sel.pageIndex, sel.refs, toggleItalic = true)
+    if (pages === doc.pages) return
+    doc = doc.copy(pages = pages)
+    history.record(before)
+    notifyHistory()
+    relayout()
+    render()
+}
+
+/** Sets font size on selected TextElement(s) in an undoable edit. */
+fun DrawingSurfaceView.setTextFontSize(sizePt: Double) {
+    val sel = selection ?: return
+    val before = doc
+    val pages = SelectionOps.restyleText(doc.pages, sel.pageIndex, sel.refs, fontSizePt = sizePt)
+    if (pages === doc.pages) return
+    doc = doc.copy(pages = pages)
+    history.record(before)
+    notifyHistory()
+    relayout()
+    render()
+}
+
 // --- the element clipboard: copy, cut, paste, duplicate ----------------------------------------
+
+const val CLIPBOARD_LABEL_FIXMY = "FiXmy Notes"
 
 /** Copy the selected elements to the clipboard (leaves the document and selection unchanged). */
 fun DrawingSurfaceView.copySelection() {
     val sel = selection ?: return
     val page = doc.pages.getOrNull(sel.pageIndex) ?: return
-    clipboard = SelectionOps.elementsAt(page, sel.refs)
+    val elements = SelectionOps.elementsAt(page, sel.refs)
+    clipboard = elements
     onClipboardChanged?.invoke(clipboard.isNotEmpty())
+
+    // Also publish an interoperable representation to Android ClipboardManager
+    runCatching {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return@runCatching
+        val textElements = elements.filterIsInstance<TextElement>()
+        val imageElements = elements.filterIsInstance<ImageElement>()
+
+        val clipData = when {
+            textElements.isNotEmpty() -> {
+                val combinedText = textElements.joinToString("\n") { it.content }
+                ClipData.newPlainText(CLIPBOARD_LABEL_FIXMY, combinedText)
+            }
+            imageElements.isNotEmpty() -> {
+                val img = imageElements.first()
+                val cacheDir = File(context.cacheDir, "shared_cache").apply { mkdirs() }
+                val cacheFile = File(cacheDir, "clip_${System.currentTimeMillis()}.png").apply {
+                    writeBytes(img.data)
+                }
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    cacheFile
+                )
+                ClipData.newUri(context.contentResolver, CLIPBOARD_LABEL_FIXMY, uri)
+            }
+            else -> {
+                ClipData.newPlainText(CLIPBOARD_LABEL_FIXMY, "")
+            }
+        }
+        cm.setPrimaryClip(clipData)
+    }
 }
 
 /** Copy then delete the selection (one undoable edit via [deleteSelection]). */
@@ -114,19 +213,81 @@ fun DrawingSurfaceView.cutSelection() {
     deleteSelection()
 }
 
-/** Whether the clipboard currently holds anything to paste. */
-fun DrawingSurfaceView.hasClipboard(): Boolean = clipboard.isNotEmpty()
+/** Whether the clipboard currently holds anything to paste (internal or external). */
+fun DrawingSurfaceView.hasClipboard(): Boolean {
+    if (clipboard.isNotEmpty()) return true
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    return cm?.hasPrimaryClip() == true
+}
 
-/** Paste the clipboard onto the visible page (offset a little), selecting the pasted copies. */
+/**
+ * Paste the clipboard onto the visible page (offset a little), selecting the pasted copies.
+ * Deterministic Precedence:
+ * 1. External Android clip (label != CLIPBOARD_LABEL_FIXMY) -> use Android clip (text/image).
+ * 2. Marked FiXmy + internal clipboard has elements -> use high-fidelity internal clipboard.
+ * 3. Marked FiXmy + internal clipboard lost/empty -> fallback to Android clip content.
+ * 4. Internal clipboard has elements (no Android clip or error) -> use internal clipboard.
+ */
 fun DrawingSurfaceView.pasteClipboard() {
-    if (clipboard.isEmpty()) return
-    val target = visiblePageIndex()
-    pasteOnto(
-        target,
-        clipboard.map {
-            SelectionOps.translate(it, DrawingSurfaceDefaults.PASTE_OFFSET_PT, DrawingSurfaceDefaults.PASTE_OFFSET_PT)
-        },
-    )
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    val clip = cm?.primaryClip
+    val label = clip?.description?.label?.toString()
+    val isFixmyLabel = label == CLIPBOARD_LABEL_FIXMY
+
+    if (!isFixmyLabel && clip != null && clip.itemCount > 0) {
+        if (pasteFromSystemClip(clip)) return
+    }
+
+    if (clipboard.isNotEmpty()) {
+        val target = visiblePageIndex()
+        pasteOnto(
+            target,
+            clipboard.map {
+                SelectionOps.translate(it, DrawingSurfaceDefaults.PASTE_OFFSET_PT, DrawingSurfaceDefaults.PASTE_OFFSET_PT)
+            },
+        )
+        return
+    }
+
+    if (clip != null && clip.itemCount > 0) {
+        pasteFromSystemClip(clip)
+    }
+}
+
+private fun DrawingSurfaceView.pasteFromSystemClip(clip: ClipData): Boolean {
+    val item = clip.getItemAt(0) ?: return false
+    val targetPage = visiblePageIndex()
+    val startX = 80.0
+    val startY = 120.0
+
+    val uri = item.uri
+    if (uri != null) {
+        val bytes = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        }.getOrNull()
+        if (bytes != null && bytes.isNotEmpty()) {
+            val (wPt, hPt) = ElementEdits.imageBoxPt(bytes)
+            val imgElem = ImageElement(startX, startY, startX + wPt, startY + hPt, bytes)
+            pasteOnto(targetPage, listOf(imgElem))
+            return true
+        }
+    }
+
+    val text = item.coerceToText(context)?.toString()
+    if (!text.isNullOrBlank()) {
+        val textElem = TextElement(
+            font = "Sans",
+            size = 14.0,
+            x = startX,
+            y = startY,
+            color = colorArgb,
+            content = text
+        )
+        pasteOnto(targetPage, listOf(textElem))
+        return true
+    }
+
+    return false
 }
 
 /** Duplicate the selection in place (offset a little), selecting the duplicates. */
@@ -166,6 +327,42 @@ fun DrawingSurfaceView.insertElements(elements: List<Element>, pageIndex: Int = 
     render()
 }
 
+/**
+ * Inserts multiple images onto [pageIndex]'s top layer as one atomic undoable edit,
+ * positioning them in a non-overlapping grid, and selecting all inserted images.
+ * Returns true if insertion succeeded, or false if any image failed validation.
+ */
+fun DrawingSurfaceView.insertMultipleImages(
+    imagesData: List<ByteArray>,
+    pageIndex: Int = visiblePageIndex(),
+    startPlacement: Placement? = null,
+): Boolean {
+    if (imagesData.isEmpty()) return false
+    val validImages = imagesData.take(MultiImagePlacement.MAX_IMAGES)
+
+    val sizes = mutableListOf<Pair<Double, Double>>()
+    for (data in validImages) {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(data, 0, data.size, opts)
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) return false
+        sizes.add(opts.outWidth.toDouble() to opts.outHeight.toDouble())
+    }
+
+    val page = doc.pages.getOrNull(pageIndex) ?: return false
+    val startX = startPlacement?.xPt ?: MultiImagePlacement.DEFAULT_MARGIN_PT
+    val startY = startPlacement?.yPt ?: MultiImagePlacement.DEFAULT_MARGIN_PT
+    val rects = MultiImagePlacement.computeGrid(sizes, page.width, page.height, startX, startY)
+    if (rects.size != validImages.size) return false
+
+    val elements = validImages.indices.map { i ->
+        val r = rects[i]
+        ImageElement(r.x, r.y, r.x + r.width, r.y + r.height, validImages[i])
+    }
+
+    pasteOnto(pageIndex, elements)
+    return true
+}
+
 /** Insert text element onto current page as an undoable edit. */
 fun DrawingSurfaceView.insertTextElement(
     text: String,
@@ -173,15 +370,18 @@ fun DrawingSurfaceView.insertTextElement(
     y: Double = 120.0,
     sizePt: Double = 14.0,
     color: Int = colorArgb,
+    font: String = "Sans",
+    extraAttrs: Map<String, String> = emptyMap(),
     pageIndex: Int = visiblePageIndex()
 ) {
     val textElem = com.nexopp.format.model.TextElement(
-        font = "Sans",
+        font = font,
         size = sizePt,
         x = x,
         y = y,
         color = color,
-        content = text
+        content = text,
+        extraAttrs = extraAttrs
     )
     insertElements(listOf(textElem), pageIndex)
 }

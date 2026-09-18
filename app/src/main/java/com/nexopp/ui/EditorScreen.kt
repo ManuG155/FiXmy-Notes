@@ -139,7 +139,8 @@ fun EditorScreen(
                     onExit = onExit,
                     onShareExport = onShareExport,
                     onSaveExport = onSaveExport,
-                    onPickAttachment = onPickAttachment
+                    onPickAttachment = onPickAttachment,
+                    onPickImage = onPickImage
                 )
             }
 
@@ -150,6 +151,7 @@ fun EditorScreen(
                 onSettingsChange = onSettingsChange,
                 tabs = tabs,
                 splitView = splitView,
+                onToggleSplitView = onToggleSplitView,
                 onActivePane = onActivePane,
                 onSurfaceCreated = onSurfaceCreated,
                 onPickImage = onPickImage,
@@ -189,6 +191,7 @@ private fun EditorBody(
     onSettingsChange: (AppSettings) -> Unit,
     tabs: List<TabsUiState>,
     splitView: Boolean,
+    onToggleSplitView: () -> Unit = {},
     onActivePane: (Int) -> Unit,
     onSurfaceCreated: (Int, DrawingSurfaceView) -> Unit,
     onPickImage: (Placement) -> Unit,
@@ -213,6 +216,7 @@ private fun EditorBody(
             SplitLayout(
                 fraction = ui.splitFraction,
                 onFraction = { ui.splitFraction = it },
+                onClose = onToggleSplitView,
                 modifier = Modifier.fillMaxSize(),
                 first = { paneAt(0, it) },
                 second = { paneAt(1, it) },

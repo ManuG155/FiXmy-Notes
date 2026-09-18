@@ -12,11 +12,13 @@ import com.nexopp.io.xoppNameFor
 import com.nexopp.render.DrawingSurfaceView
 import com.nexopp.render.ImageImport
 import com.nexopp.render.ImportPdfMode
+import com.nexopp.render.MultiImagePlacement
 import com.nexopp.render.PdfImport
-import com.nexopp.render.blankDocument
 import com.nexopp.render.PdfPageCache
 import com.nexopp.render.PdfTextExtractor
 import com.nexopp.render.PdfTextIndexCache
+import com.nexopp.render.blankDocument
+import com.nexopp.render.insertMultipleImages
 import com.nexopp.tabs.OpenTab
 import com.nexopp.tabs.TabStore
 import com.nexopp.ui.AppSettings
@@ -194,12 +196,41 @@ internal fun MainActivity.shareExport(
     }
 }
 
-internal fun MainActivity.insertPickedImage(uri: Uri) = runCatching {
-    val placement = pendingImagePlacement ?: return@runCatching
+internal fun MainActivity.insertPickedImages(uris: List<Uri>) = runCatching {
+    if (uris.isEmpty()) return@runCatching
+    val placement = pendingImagePlacement
     pendingImagePlacement = null
-    val bytes = staging.readBytes(uri)
-    surface?.insertImage(placement, bytes)
-}.onFailure { toast("Error al insertar imagen: ${it.message}") }
+
+    val targetUris = if (uris.size > MultiImagePlacement.MAX_IMAGES) {
+        toast("Se seleccionaron ${uris.size} imágenes. Se procesarán las primeras ${MultiImagePlacement.MAX_IMAGES}.")
+        uris.take(MultiImagePlacement.MAX_IMAGES)
+    } else {
+        uris
+    }
+
+    val bytesList = mutableListOf<ByteArray>()
+    for (uri in targetUris) {
+        val bytes = staging.readBytes(uri)
+        val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) {
+            toast("Error: una de las imágenes seleccionadas es inválida o corrupta. Operación cancelada.")
+            return@runCatching
+        }
+        bytesList.add(bytes)
+    }
+
+    val view = surface ?: return@runCatching
+    val pageIndex = placement?.pageIndex ?: view.visiblePageIndex()
+    val success = view.insertMultipleImages(bytesList, pageIndex, placement)
+    if (!success) {
+        toast("Error al insertar imágenes.")
+    }
+}.onFailure { toast("Error al insertar imágenes: ${it.message}") }
+
+internal fun MainActivity.insertPickedImage(uri: Uri) {
+    insertPickedImages(listOf(uri))
+}
 
 internal fun MainActivity.insertCapturedPhoto(bitmap: android.graphics.Bitmap) = runCatching {
     val placement = pendingImagePlacement ?: com.nexopp.render.Placement(surface?.visiblePageIndex() ?: 0, 100.0, 100.0)

@@ -91,7 +91,8 @@ fun UnifiedTopBar(
     onExit: () -> Unit,
     onShareExport: (com.nexopp.io.ExportManager.ExportFormat, List<Int>, Float) -> Unit = { _, _, _ -> },
     onSaveExport: (com.nexopp.io.ExportManager.ExportFormat, String, List<Int>, Float) -> Unit = { _, _, _, _ -> },
-    onPickAttachment: () -> Unit = {}
+    onPickAttachment: () -> Unit = {},
+    onPickImage: (com.nexopp.render.Placement) -> Unit = {}
 ) {
     val context = LocalContext.current
     val surface = pane.surface
@@ -137,7 +138,8 @@ fun UnifiedTopBar(
         onSaveAsDocument = onSaveAs,
         onImportPdf = onImportPdf,
         splitView = splitView,
-        onToggleSplitView = onToggleSplitView
+        onToggleSplitView = onToggleSplitView,
+        onPickImage = { onPickImage(com.nexopp.render.Placement(pane.currentPage, 100.0, 100.0)) }
     )
 
     if (showPageManager) {

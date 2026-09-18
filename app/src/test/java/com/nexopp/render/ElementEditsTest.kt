@@ -94,4 +94,43 @@ class ElementEditsTest {
         assertFalse(ElementEdits.hitsText(one, 1.0, 30.0))
         assertTrue(ElementEdits.hitsText(three, 1.0, 30.0))
     }
+
+    @Test fun updateTextPreservesAllExistingAttributesAndUpdatesRequestedOnes() {
+        val original = TextElement(
+            font = "Sans Bold",
+            size = 14.0,
+            x = 50.0,
+            y = 70.0,
+            color = 0xFF00FF00.toInt(),
+            content = "Original Text",
+            extraAttrs = mapOf("ts" to "12345", "fn" to "audio.wav")
+        )
+        val d = doc(page(Layer(listOf(original))))
+
+        // Add underline via extraModifier
+        val out = ElementEdits.updateText(d, original, extraModifier = { it + ("underline" to "true") })!!
+        val updated = out.pages[0].layers[0].elements[0] as TextElement
+
+        assertEquals("Original Text", updated.content)
+        assertEquals("Sans Bold", updated.font)
+        assertEquals(14.0, updated.size, 0.001)
+        assertEquals(0xFF00FF00.toInt(), updated.color)
+        assertEquals(50.0, updated.x, 0.001)
+        assertEquals(70.0, updated.y, 0.001)
+        // Audio sidecar attrs preserved:
+        assertEquals("12345", updated.extraAttrs["ts"])
+        assertEquals("audio.wav", updated.extraAttrs["fn"])
+        // Underline added:
+        assertEquals("true", updated.extraAttrs["underline"])
+    }
+
+    @Test fun addElementsAppendsMultipleElementsAtOnce() {
+        val d = doc(page(Layer(emptyList())))
+        val t1 = text("item 1")
+        val t2 = text("item 2")
+        val out = ElementEdits.addElements(d, 0, listOf(t1, t2)) { 0 }!!
+        assertEquals(2, out.pages[0].layers[0].elements.size)
+        assertSame(t1, out.pages[0].layers[0].elements[0])
+        assertSame(t2, out.pages[0].layers[0].elements[1])
+    }
 }

@@ -992,8 +992,14 @@ class DrawingSurfaceView @JvmOverloads constructor(
     // commits the document it hands back.
 
     /** Create a text box (or edit the one a tap hit) at the placement; blank content deletes it. */
-    fun insertText(p: Placement, content: String, font: String, sizePt: Double, colorArgb: Int) =
-        textEdits.insertText(p, content, font, sizePt, colorArgb)
+    fun insertText(
+        p: Placement,
+        content: String,
+        font: String,
+        sizePt: Double,
+        colorArgb: Int,
+        extraAttrs: Map<String, String> = emptyMap(),
+    ) = textEdits.insertText(p, content, font, sizePt, colorArgb, extraAttrs)
 
     /** Place a LaTeX image at the placement, sized to a default box (resizable later). */
     fun insertTex(p: Placement, latex: String, colorArgb: Int) = textEdits.insertTex(p, latex, colorArgb)

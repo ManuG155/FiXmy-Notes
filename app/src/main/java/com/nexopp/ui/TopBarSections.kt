@@ -26,9 +26,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nexopp.format.FontDescription
 import com.nexopp.format.model.LineStyle
 import com.nexopp.render.DrawingSurfaceView
 import com.nexopp.render.GuideKind
+import com.nexopp.render.selectedTextElement
+import com.nexopp.render.setTextFontSize
+import com.nexopp.render.toggleTextBold
+import com.nexopp.render.toggleTextItalic
+import com.nexopp.render.toggleTextUnderline
+import kotlin.math.roundToInt
 
 enum class TopBarSection(val label: String, val icon: ImageVector) {
     ESCRITURA("Escritura", Icons.Filled.Create),
@@ -72,6 +79,7 @@ fun CategorizedTopBar(
     onImportPdf: () -> Unit,
     splitView: Boolean,
     onToggleSplitView: () -> Unit,
+    onPickImage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val surface = pane.surface
@@ -328,7 +336,8 @@ fun CategorizedTopBar(
                                             surface = surface,
                                             onOpenTableDialog = onOpenTableDialog,
                                             onOpenTechnicalSymbols = onOpenTechnicalSymbols,
-                                            onOpenInsertLinkDialog = onOpenInsertLinkDialog
+                                            onOpenInsertLinkDialog = onOpenInsertLinkDialog,
+                                            onPickImage = onPickImage
                                         )
                                     }
                                     TopBarSection.PAGINAS -> {
@@ -343,7 +352,8 @@ fun CategorizedTopBar(
                                     }
                                     TopBarSection.AUDIO -> {
                                         AudioSectionContent(
-                                            audio = audio
+                                            audio = audio,
+                                            onOpenSpeechToText = { ui.showSpeechToText = true }
                                         )
                                     }
                                     TopBarSection.EXPORTAR -> {
@@ -707,16 +717,24 @@ private fun TextoSectionContent(
 
     VerticalDivider(modifier = Modifier.height(28.dp))
 
-    // Rich Text Format: Negrita, Cursiva, Subrayado
-    var isBold by remember { mutableStateOf(false) }
-    var isItalic by remember { mutableStateOf(false) }
-    var isUnderline by remember { mutableStateOf(false) }
-    var selectedFontSize by remember { mutableStateOf(11) } // Default 11 pt
+    // Rich Text Format: Negrita, Cursiva, Subrayado (conectado al TextElement seleccionado y a textDefaults)
+    val selectedText = surface?.selectedTextElement()
+    val selectedFd = selectedText?.let { FontDescription.parse(it.font) }
+
+    val isBold = selectedFd?.bold ?: ui.textDefaults.bold
+    val isItalic = selectedFd?.italic ?: ui.textDefaults.italic
+    val isUnderline = selectedText?.let { it.extraAttrs["underline"] == "true" } ?: ui.textDefaults.underline
+    val selectedFontSize = selectedText?.let { it.size.roundToInt() } ?: ui.textDefaults.size.roundToInt()
     var fontSizeMenuExpanded by remember { mutableStateOf(false) }
 
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(
-            onClick = { isBold = !isBold },
+            onClick = {
+                if (surface?.selectedTextElement() != null) {
+                    surface.toggleTextBold()
+                }
+                ui.textDefaults.bold = !isBold
+            },
             modifier = Modifier
                 .size(38.dp)
                 .clip(RoundedCornerShape(6.dp))
@@ -726,7 +744,12 @@ private fun TextoSectionContent(
         }
 
         IconButton(
-            onClick = { isItalic = !isItalic },
+            onClick = {
+                if (surface?.selectedTextElement() != null) {
+                    surface.toggleTextItalic()
+                }
+                ui.textDefaults.italic = !isItalic
+            },
             modifier = Modifier
                 .size(38.dp)
                 .clip(RoundedCornerShape(6.dp))
@@ -736,7 +759,12 @@ private fun TextoSectionContent(
         }
 
         IconButton(
-            onClick = { isUnderline = !isUnderline },
+            onClick = {
+                if (surface?.selectedTextElement() != null) {
+                    surface.toggleTextUnderline()
+                }
+                ui.textDefaults.underline = !isUnderline
+            },
             modifier = Modifier
                 .size(38.dp)
                 .clip(RoundedCornerShape(6.dp))
@@ -748,7 +776,7 @@ private fun TextoSectionContent(
 
     VerticalDivider(modifier = Modifier.height(28.dp))
 
-    // Selector Numérico de Tamaño de Fuente (Default 11 pt)
+    // Selector Numérico de Tamaño de Fuente
     Box {
         OutlinedButton(
             onClick = { fontSizeMenuExpanded = true },
@@ -767,12 +795,27 @@ private fun TextoSectionContent(
                         if (size == selectedFontSize) Icon(Icons.Filled.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     },
                     onClick = {
-                        selectedFontSize = size
+                        if (surface?.selectedTextElement() != null) {
+                            surface.setTextFontSize(size.toDouble())
+                        }
+                        ui.textDefaults.size = size.toDouble()
                         fontSizeMenuExpanded = false
                     }
                 )
             }
         }
+    }
+
+    VerticalDivider(modifier = Modifier.height(28.dp))
+
+    OutlinedButton(
+        onClick = { ui.showSpeechToText = true },
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+        modifier = Modifier.height(38.dp)
+    ) {
+        Icon(Icons.Filled.Mic, contentDescription = "Dictar por voz", modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Dictar", fontSize = 13.sp)
     }
 
     ToolbarColorPopup(styleCallbacks = styleCallbacks)
@@ -785,8 +828,29 @@ private fun InsertarSectionContent(
     surface: DrawingSurfaceView?,
     onOpenTableDialog: () -> Unit,
     onOpenTechnicalSymbols: () -> Unit,
-    onOpenInsertLinkDialog: () -> Unit
+    onOpenInsertLinkDialog: () -> Unit,
+    onPickImage: () -> Unit
 ) {
+    Button(
+        onClick = onPickImage,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        modifier = Modifier.height(38.dp)
+    ) {
+        Icon(Icons.Filled.Image, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Imagen", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    }
+
+    OutlinedButton(
+        onClick = { ui.showBrowserDialog = true },
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        modifier = Modifier.height(38.dp)
+    ) {
+        Icon(Icons.Filled.Public, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Navegador Web", fontSize = 13.sp)
+    }
+
     OutlinedButton(
         onClick = onOpenTableDialog,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
@@ -899,7 +963,8 @@ private fun PaginasSectionContent(
 
 @Composable
 private fun AudioSectionContent(
-    audio: AudioUiState
+    audio: AudioUiState,
+    onOpenSpeechToText: () -> Unit
 ) {
     Button(
         onClick = { audio.onToggleRecord() },
@@ -933,6 +998,16 @@ private fun AudioSectionContent(
             Spacer(Modifier.width(6.dp))
             Text("Detener Reproducción", fontSize = 13.sp)
         }
+    }
+
+    OutlinedButton(
+        onClick = onOpenSpeechToText,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        modifier = Modifier.height(38.dp)
+    ) {
+        Icon(Icons.Filled.RecordVoiceOver, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Dictado (Texto)", fontSize = 13.sp)
     }
 }
 
